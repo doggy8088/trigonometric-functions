@@ -23,6 +23,7 @@
             display: block;
             min-width: 0;
             min-height: 0;
+            position: relative;
             touch-action: none; /* 防止在畫布上滑動時觸發網頁捲動 */
         }
         #ui-container {
@@ -80,19 +81,95 @@
         .blue-box { background-color: #33ccff; box-shadow: 0 0 8px #33ccff; }
         .green-box { background-color: #33ff33; box-shadow: 0 0 8px #33ff33; }
         
-        .control-group {
-            margin-top: 20px;
-            border-top: 1px solid #444;
-            padding-top: 15px;
+        #speed-control {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: min(320px, 30vw);
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 12px 14px;
+            box-sizing: border-box;
+            backdrop-filter: blur(5px);
+            z-index: 12;
+        }
+        .speed-label {
+            display: block;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #f3f3f3;
+            text-shadow: 0 0 8px rgba(255, 204, 0, 0.25);
+        }
+        .speed-buttons {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .speed-btn {
+            border: 1px solid #4a4a4a;
+            border-radius: 8px;
+            background: #1a1a1a;
+            color: #ddd;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 8px 6px;
+            cursor: pointer;
+        }
+        .speed-btn:hover {
+            border-color: #6a6a6a;
+            color: #fff;
+        }
+        .speed-btn.active {
+            border-color: #ffcc00;
+            color: #ffdd44;
+            box-shadow: 0 0 10px rgba(255, 204, 0, 0.25);
+        }
+        #hud-layer {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 4;
+        }
+        .data-tag {
+            position: absolute;
+            left: 0;
+            top: 0;
+            transform: translate(-9999px, -9999px);
+            opacity: 0;
+            padding: 5px 8px;
+            border-radius: 999px;
+            border: 1px solid #555;
+            background: rgba(8, 8, 8, 0.82);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+            text-shadow: 0 0 6px rgba(255, 255, 255, 0.25);
+            box-shadow: 0 0 14px rgba(0, 0, 0, 0.35);
+            animation: dataTagPulse 1.8s ease-in-out infinite;
+            transition: opacity 120ms ease-out;
+        }
+        .data-tag.angle { border-color: #ffcc00; color: #ffdd66; }
+        .data-tag.hyp { border-color: #bbbbbb; color: #e8e8e8; }
+        .data-tag.adj { border-color: #33ccff; color: #66ddff; }
+        .data-tag.opp { border-color: #ff3366; color: #ff6688; }
+        .data-tag.tan { border-color: #33ff33; color: #66ff66; }
+        .data-tag.arc { border-color: #bb88ff; color: #d5bbff; }
+        @keyframes dataTagPulse {
+            0%, 100% { box-shadow: 0 0 14px rgba(0, 0, 0, 0.35); }
+            50% { box-shadow: 0 0 18px rgba(255, 255, 255, 0.18); }
         }
         label {
             display: block;
             margin-bottom: 5px;
             font-size: 14px;
-        }
-        input[type=range] {
-            width: 100%;
-            cursor: pointer;
         }
         .math-text {
             font-family: monospace;
@@ -140,8 +217,29 @@
             h1 { font-size: 20px; }
             p { font-size: 13px; margin: 5px 0 10px 0; }
             .legend { font-size: 14px; margin-bottom: 2px; }
-            .control-group { margin-top: 10px; padding-top: 10px; }
             .math-text { font-size: 13px; padding: 8px; }
+            #speed-control {
+                top: calc(10px + env(safe-area-inset-top));
+                right: calc(10px + env(safe-area-inset-right));
+                width: min(260px, calc(100vw - 20px - env(safe-area-inset-right)));
+                padding: 10px 12px;
+            }
+            .speed-label {
+                font-size: 13px;
+                margin-bottom: 6px;
+            }
+            .speed-buttons {
+                gap: 6px;
+            }
+            .speed-btn {
+                font-size: 13px;
+                padding: 9px 6px;
+                min-height: 38px;
+            }
+            .data-tag {
+                font-size: 11px;
+                padding: 4px 7px;
+            }
         }
     </style>
     <!-- 引入 Three.js -->
@@ -181,13 +279,26 @@
             </div>
         </div>
 
-        <div class="control-group">
-            <label for="speed-slider">自動轉動速度 (拖曳時會暫停)</label>
-            <input type="range" id="speed-slider" min="0" max="0.1" step="0.005" value="0.015">
-        </div>
     </div>
 
     <div id="canvas-container"></div>
+    <div id="hud-layer">
+        <div id="hud-angle" class="data-tag angle"></div>
+        <div id="hud-hyp" class="data-tag hyp"></div>
+        <div id="hud-adj" class="data-tag adj"></div>
+        <div id="hud-opp" class="data-tag opp"></div>
+        <div id="hud-tan" class="data-tag tan"></div>
+        <div id="hud-arc" class="data-tag arc"></div>
+    </div>
+    <div id="speed-control">
+        <span class="speed-label">自動轉動速度</span>
+        <div class="speed-buttons">
+            <button type="button" class="speed-btn" data-speed="0">暫停</button>
+            <button type="button" class="speed-btn" data-speed="0.008">慢速</button>
+            <button type="button" class="speed-btn active" data-speed="0.015">標準</button>
+            <button type="button" class="speed-btn" data-speed="0.03">快速</button>
+        </div>
+    </div>
 
     <script>
         // --- 1. 基本場景設定 ---
@@ -376,14 +487,17 @@
 
 
         // --- 4. 互動與 UI 控制 (新增滑鼠/觸控拖曳) ---
-        const speedSlider = document.getElementById('speed-slider');
+        const speedButtons = Array.from(document.querySelectorAll('.speed-btn'));
         const angleValDisplay = document.getElementById('angle-val');
         const sinValDisplay = document.getElementById('sin-val');
         const cosValDisplay = document.getElementById('cos-val');
         const tanValDisplay = document.getElementById('tan-val');
 
-        speedSlider.addEventListener('input', (e) => {
-            speed = parseFloat(e.target.value);
+        speedButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                speed = parseFloat(button.dataset.speed);
+                speedButtons.forEach((btn) => btn.classList.toggle('active', btn === button));
+            });
         });
 
         window.addEventListener('resize', () => {
