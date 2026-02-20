@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>三角函數視覺化教學</title>
     <style>
         body {
@@ -17,6 +17,7 @@
             width: 100vw;
             height: 100vh;
             display: block;
+            touch-action: none; /* 防止在畫布上滑動時觸發網頁捲動 */
         }
         #ui-container {
             position: absolute;
@@ -42,6 +43,15 @@
             font-size: 14px;
             line-height: 1.5;
             color: #ddd;
+        }
+        .tip {
+            background: rgba(255, 204, 0, 0.2);
+            border-left: 4px solid #ffcc00;
+            padding: 8px 12px;
+            border-radius: 0 4px 4px 0;
+            margin-bottom: 15px;
+            font-weight: bold;
+            color: #ffdd44;
         }
         .legend {
             display: flex;
@@ -101,6 +111,7 @@
             }
             h1 { font-size: 20px; }
             p { font-size: 13px; margin: 5px 0 10px 0; }
+            .tip { font-size: 13px; padding: 6px 10px; margin-bottom: 10px; }
             .legend { font-size: 14px; margin-bottom: 2px; }
             .control-group { margin-top: 10px; padding-top: 10px; }
             .math-text { font-size: 13px; padding: 8px; }
@@ -113,25 +124,24 @@
 
     <div id="ui-container">
         <h1>神奇的三角函數</h1>
-        <p>想像這是一個轉動的摩天輪！黃色的星星代表車廂。</p>
         
+        <!-- 新增互動提示 -->
+        <div class="tip">👆 提示：你可以直接點擊或拖曳黃色的星星，手動改變它的角度喔！</div>
+
         <div class="legend">
             <div class="color-box red-box"></div>
             <span>Sine (正弦) = 高度</span>
         </div>
-        <p style="margin-left: 26px;">紅線是星星的「高度」。</p>
         
         <div class="legend">
             <div class="color-box blue-box"></div>
             <span>Cosine (餘弦) = 水平距離</span>
         </div>
-        <p style="margin-left: 26px;">藍線是星星離中心的「左右距離」。</p>
 
         <div class="legend">
             <div class="color-box green-box"></div>
             <span>Tangent (正切) = 坡度/斜率</span>
         </div>
-        <p style="margin-left: 26px;">想像從中心發射雷射光打在右邊的牆上，綠線就是打中的「高度」，代表斜坡有多陡！</p>
 
         <!-- 與學校課本結合的動態公式顯示 -->
         <div class="math-text">
@@ -148,7 +158,7 @@
         </div>
 
         <div class="control-group">
-            <label for="speed-slider">轉動速度</label>
+            <label for="speed-slider">自動轉動速度 (拖曳時會暫停)</label>
             <input type="range" id="speed-slider" min="0" max="0.1" step="0.005" value="0.015">
         </div>
     </div>
@@ -168,7 +178,6 @@
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         container.appendChild(renderer.domElement);
 
-        // 封裝相機更新邏輯，以動態適應不同螢幕大小
         function updateCamera() {
             const aspect = window.innerWidth / window.innerHeight;
             const baseFrustumSize = 35;
@@ -193,7 +202,7 @@
         // --- 2. 定義數學與物理參數 ---
         const R = 6; // 圓的半徑
         let theta = 0; // 當前角度
-        let speed = 0.015; // 稍微調慢預設速度，方便觀察 Tangent 變化
+        let speed = 0.015; 
         
         const circleCenter = new THREE.Vector3(-8, 8, 0);
         const wavePointsCount = 400;
@@ -219,7 +228,6 @@
 
         // (B) 建立中心十字線 (X軸與Y軸)
         const axesMaterial = new THREE.LineDashedMaterial({ color: 0x444444, dashSize: 0.5, gapSize: 0.5 });
-        
         const xAxisGeo = new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(circleCenter.x - R - 2, circleCenter.y, 0),
             new THREE.Vector3(circleCenter.x + R + 4, circleCenter.y, 0)
@@ -242,6 +250,12 @@
         const movingPoint = new THREE.Mesh(pointGeometry, pointMaterial);
         scene.add(movingPoint);
 
+        // 為了讓手機跟滑鼠更容易點擊到星星，建立一個透明的「放大版感應區」
+        const hitGeometry = new THREE.SphereGeometry(1.5, 16, 16); 
+        const hitMaterial = new THREE.MeshBasicMaterial({ visible: false });
+        const hitMesh = new THREE.Mesh(hitGeometry, hitMaterial);
+        movingPoint.add(hitMesh); // 綁定在星星上
+
         const radiusGeo = new THREE.BufferGeometry().setFromPoints([circleCenter, movingPoint.position]);
         const radiusLine = new THREE.Line(radiusGeo, new THREE.LineBasicMaterial({ color: 0xaaaaaa }));
         scene.add(radiusLine);
@@ -255,9 +269,7 @@
         const oppLine = new THREE.Line(oppGeo, new THREE.LineBasicMaterial({ color: 0xff3366, linewidth: 3 }));
         scene.add(oppLine);
 
-        // (D) 新增：建立 Tangent 視覺化 (綠色線與投影牆)
-        
-        // 切線參考牆 (X = circleCenter.x + R)
+        // (D) Tangent 視覺化
         const tanWallGeo = new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(circleCenter.x + R, circleCenter.y - R * 2.5, 0),
             new THREE.Vector3(circleCenter.x + R, circleCenter.y + R * 2.5, 0)
@@ -266,16 +278,13 @@
         tanWallLine.computeLineDistances();
         scene.add(tanWallLine);
 
-        // 綠色的 Tangent 線
         const tanGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
         const tanLine = new THREE.Line(tanGeo, new THREE.LineBasicMaterial({ color: 0x33ff33, linewidth: 4 }));
         scene.add(tanLine);
 
-        // 雷射光延伸虛線 (從圓心射出)
         const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
         const laserLine = new THREE.Line(laserGeo, new THREE.LineDashedMaterial({ color: 0xffff00, dashSize: 0.4, gapSize: 0.2, opacity: 0.5, transparent: true }));
         scene.add(laserLine);
-
 
         // (E) 建立 Sine 與 Cosine 波浪
         const sinWaveGeo = new THREE.BufferGeometry();
@@ -290,7 +299,6 @@
         const cosWaveLine = new THREE.Line(cosWaveGeo, new THREE.LineBasicMaterial({ color: 0x33ccff, linewidth: 2 }));
         scene.add(cosWaveLine);
 
-        // 投影虛線
         const dashMat = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.3, gapSize: 0.3 });
         const sinProjGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
         const sinProjLine = new THREE.Line(sinProjGeo, dashMat);
@@ -301,12 +309,12 @@
         scene.add(cosProjLine);
 
 
-        // --- 4. 互動與 UI 控制 ---
+        // --- 4. 互動與 UI 控制 (新增滑鼠/觸控拖曳) ---
         const speedSlider = document.getElementById('speed-slider');
         const angleValDisplay = document.getElementById('angle-val');
         const sinValDisplay = document.getElementById('sin-val');
         const cosValDisplay = document.getElementById('cos-val');
-        const tanValDisplay = document.getElementById('tan-val'); // 新增 Tangent 顯示
+        const tanValDisplay = document.getElementById('tan-val');
 
         speedSlider.addEventListener('input', (e) => {
             speed = parseFloat(e.target.value);
@@ -317,12 +325,72 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }, false);
 
+        // 射線與游標設定
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        let isDragging = false;
+
+        // 計算游標在畫面上的座標 (-1 到 1)
+        function updatePointer(event) {
+            pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+            pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        // 偵測滑鼠按下 / 手指觸碰
+        container.addEventListener('pointerdown', (event) => {
+            updatePointer(event);
+            raycaster.setFromCamera(pointer, camera);
+            
+            // 檢查是否點擊到星星的感應區
+            const intersects = raycaster.intersectObject(hitMesh);
+            if (intersects.length > 0) {
+                isDragging = true;
+                container.style.cursor = 'grabbing';
+            }
+        });
+
+        // 偵測滑鼠移動 / 手指拖曳
+        window.addEventListener('pointermove', (event) => {
+            updatePointer(event);
+            raycaster.setFromCamera(pointer, camera);
+
+            if (isDragging) {
+                // 如果正在拖曳，計算游標與圓心的數學角度
+                const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+                const target = new THREE.Vector3();
+                raycaster.ray.intersectPlane(plane, target); // 計算游標在 3D 空間的位置
+                
+                const dx = target.x - circleCenter.x;
+                const dy = target.y - circleCenter.y;
+                
+                // 使用反正切函數計算角度
+                theta = Math.atan2(dy, dx);
+                if (theta < 0) theta += Math.PI * 2; // 保持角度在 0 ~ 360 度之間
+            } else {
+                // 只是滑過星星時，改變游標樣式提示使用者可以點擊
+                const intersects = raycaster.intersectObject(hitMesh);
+                if (intersects.length > 0) {
+                    container.style.cursor = 'grab';
+                } else {
+                    container.style.cursor = 'default';
+                }
+            }
+        });
+
+        // 偵測滑鼠放開 / 手指離開
+        window.addEventListener('pointerup', () => {
+            isDragging = false;
+            container.style.cursor = 'default';
+        });
+
         // --- 5. 動畫迴圈 (核心物理規律計算) ---
         function animate() {
             requestAnimationFrame(animate);
 
-            // 更新角度
-            theta += speed;
+            // 當沒有在拖曳星星時，才讓它自動旋轉
+            if (!isDragging) {
+                theta += speed;
+            }
             
             // 計算 Sine 和 Cosine
             const sinValue = Math.sin(theta);
@@ -354,18 +422,16 @@
             oppPositions[4] = currentY;
             oppLine.geometry.attributes.position.needsUpdate = true;
 
-            // --- 新增：更新 Tangent 視覺化 ---
+            // --- 更新 Tangent 視覺化 ---
             let rawTan = Math.tan(theta);
             let displayTan = rawTan.toFixed(2);
             
-            // 處理 90 度和 270 度的無限大情況
             if (Math.abs(cosValue) < 0.001) {
                 displayTan = "∞";
-                rawTan = rawTan > 0 ? 100 : -100; // 給定一個極大值避免運算崩潰
+                rawTan = rawTan > 0 ? 100 : -100;
             }
             
-            // 視覺化長度限制：避免綠線畫出螢幕外太多
-            const maxVisualTan = 2.5; // 最多畫出 2.5 倍的半徑長度
+            const maxVisualTan = 2.5; 
             let visualTan = rawTan;
             if (visualTan > maxVisualTan) visualTan = maxVisualTan;
             if (visualTan < -maxVisualTan) visualTan = -maxVisualTan;
@@ -373,7 +439,6 @@
             const tanX = circleCenter.x + R;
             const tanY = circleCenter.y + R * visualTan;
 
-            // 畫出綠色 Tangent 線 (從 X軸起點 到 計算高度)
             const tanPositions = tanLine.geometry.attributes.position.array;
             tanPositions[0] = tanX;
             tanPositions[1] = circleCenter.y;
@@ -381,7 +446,6 @@
             tanPositions[4] = tanY;
             tanLine.geometry.attributes.position.needsUpdate = true;
 
-            // 畫出黃色雷射光 (從中心發射到 Tangent 牆上)
             const laserPositions = laserLine.geometry.attributes.position.array;
             laserPositions[0] = circleCenter.x;
             laserPositions[1] = circleCenter.y;
@@ -436,7 +500,7 @@
             angleValDisplay.innerText = displayDeg.toString().padStart(3, '0');
             sinValDisplay.innerText = sinValue.toFixed(2);
             cosValDisplay.innerText = cosValue.toFixed(2);
-            tanValDisplay.innerText = displayTan; // 顯示 Tangent 值
+            tanValDisplay.innerText = displayTan; 
 
             renderer.render(scene, camera);
         }
