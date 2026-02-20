@@ -161,7 +161,12 @@
         .data-tag.adj { border-color: #33ccff; color: #66ddff; }
         .data-tag.opp { border-color: #ff3366; color: #ff6688; }
         .data-tag.tan { border-color: #33ff33; color: #66ff66; }
-        .data-tag.arc { border-color: #bb88ff; color: #d5bbff; }
+        .data-tag.arc {
+            border-color: #bb88ff !important;
+            color: #e0ccff !important;
+            background: rgba(78, 34, 128, 0.32);
+            box-shadow: 0 0 14px rgba(187, 136, 255, 0.35);
+        }
         @keyframes dataTagPulse {
             0%, 100% { box-shadow: 0 0 14px rgba(0, 0, 0, 0.35); }
             50% { box-shadow: 0 0 18px rgba(255, 255, 255, 0.18); }
@@ -290,15 +295,15 @@
         <div id="hud-tan" class="data-tag tan"></div>
         <div id="hud-arc" class="data-tag arc"></div>
     </div>
-    <div id="speed-control">
-        <span class="speed-label">自動轉動速度</span>
-        <div class="speed-buttons">
-            <button type="button" class="speed-btn" data-speed="0">暫停</button>
-            <button type="button" class="speed-btn" data-speed="0.008">慢速</button>
-            <button type="button" class="speed-btn active" data-speed="0.015">標準</button>
-            <button type="button" class="speed-btn" data-speed="0.03">快速</button>
+        <div id="speed-control">
+            <span class="speed-label">自動轉動速度</span>
+            <div class="speed-buttons">
+                <button type="button" class="speed-btn" data-speed="0">暫停</button>
+                <button type="button" class="speed-btn active" data-speed="0.008">慢速</button>
+                <button type="button" class="speed-btn" data-speed="0.015">標準</button>
+                <button type="button" class="speed-btn" data-speed="0.03">快速</button>
+            </div>
         </div>
-    </div>
 
     <script>
         // --- 1. 基本場景設定 ---
@@ -310,13 +315,17 @@
         const minZoom = 0.5;
         const maxZoom = 4;
         const zoomSensitivity = 0.0015;
+        const desktopZoomLevelStep = 0.1;
+        const desktopZoomBoostLevels = 4;
         let wasMobileLayout = window.matchMedia('(max-width: 768px)').matches;
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         container.appendChild(renderer.domElement);
         renderer.domElement.style.display = 'block';
-        camera.zoom = wasMobileLayout ? 1 : minZoom;
+        camera.zoom = wasMobileLayout
+            ? 1
+            : THREE.MathUtils.clamp(minZoom + desktopZoomLevelStep * desktopZoomBoostLevels, minZoom, maxZoom);
 
         function getViewportSize() {
             return {
@@ -329,8 +338,8 @@
             const isMobile = window.matchMedia('(max-width: 768px)').matches;
             return {
                 baseFrustumSize: isMobile ? 32 : 35,
-                // 桌機更靠左，手機維持偏左
-                anchorNdcX: isMobile ? -0.45 : -0.58,
+                // 動畫主體固定在畫布由左到右約 2/5 的位置
+                anchorNdcX: -0.2,
                 anchorNdcY: 0.0
             };
         }
@@ -366,7 +375,11 @@
             if (isMobile) {
                 camera.zoom = 1;
             } else if (wasMobileLayout) {
-                camera.zoom = minZoom;
+                camera.zoom = THREE.MathUtils.clamp(
+                    minZoom + desktopZoomLevelStep * desktopZoomBoostLevels,
+                    minZoom,
+                    maxZoom
+                );
             }
             camera.zoom = THREE.MathUtils.clamp(camera.zoom, minZoom, maxZoom);
             wasMobileLayout = isMobile;
@@ -375,9 +388,9 @@
         }
 
         // --- 2. 定義數學與物理參數 ---
-        const R = 6; // 圓的半徑
+        const R = 10.00; // 圓的半徑
         let theta = 0; // 當前角度
-        let speed = 0.015; 
+        let speed = 0.008; 
         
         const circleCenter = new THREE.Vector3(-8, 8, 0);
         const wavePointsCount = 400;
@@ -402,6 +415,17 @@
         const circleMaterial = new THREE.LineBasicMaterial({ color: 0x666666, linewidth: 2 });
         const circleLine = new THREE.LineLoop(circleGeometry, circleMaterial);
         scene.add(circleLine);
+        // 用紫色弧線凸顯目前角度對應的弧長（覆蓋在灰色圓框上）
+        const arcSegments = 96;
+        const arcPathGeo = new THREE.BufferGeometry();
+        const arcPathVertices = new Float32Array((arcSegments + 1) * 3);
+        arcPathGeo.setAttribute('position', new THREE.BufferAttribute(arcPathVertices, 3));
+        arcPathGeo.setDrawRange(0, 0);
+        const arcPathLine = new THREE.Line(
+            arcPathGeo,
+            new THREE.LineBasicMaterial({ color: 0xbb88ff, linewidth: 4 })
+        );
+        scene.add(arcPathLine);
 
         // (B) 建立中心十字線 (X軸與Y軸)
         const axesMaterial = new THREE.LineDashedMaterial({ color: 0x444444, dashSize: 0.5, gapSize: 0.5 });
@@ -492,6 +516,13 @@
         const sinValDisplay = document.getElementById('sin-val');
         const cosValDisplay = document.getElementById('cos-val');
         const tanValDisplay = document.getElementById('tan-val');
+        const hudAngleTag = document.getElementById('hud-angle');
+        const hudHypTag = document.getElementById('hud-hyp');
+        const hudAdjTag = document.getElementById('hud-adj');
+        const hudOppTag = document.getElementById('hud-opp');
+        const hudTanTag = document.getElementById('hud-tan');
+        const hudArcTag = document.getElementById('hud-arc');
+        const projectedVec = new THREE.Vector3();
 
         speedButtons.forEach((button) => {
             button.addEventListener('click', () => {
@@ -574,6 +605,246 @@
             isDragging = false;
             container.style.cursor = 'default';
         });
+
+        function signed(num) {
+            return `${num >= 0 ? '+' : ''}${num.toFixed(2)}`;
+        }
+
+        function projectToScreen(x, y, rect) {
+            projectedVec.set(x, y, 0).project(camera);
+            return {
+                x: rect.left + (projectedVec.x * 0.5 + 0.5) * rect.width,
+                y: rect.top + (-projectedVec.y * 0.5 + 0.5) * rect.height,
+                visible: projectedVec.z > -1 && projectedVec.z < 1
+            };
+        }
+
+        function isRectOverlapping(a, b, gap = 6) {
+            return !(
+                a.right + gap < b.left ||
+                a.left > b.right + gap ||
+                a.bottom + gap < b.top ||
+                a.top > b.bottom + gap
+            );
+        }
+
+        function placeTagWithAvoidance(tag, point, text, offsetCandidates, placedRects, extraAvoidRects = [], gap = 6) {
+            tag.textContent = text;
+            const tagWidth = Math.max(tag.offsetWidth, 56);
+            const tagHeight = Math.max(tag.offsetHeight, 22);
+
+            if (!point.visible) {
+                tag.style.opacity = '0';
+                return null;
+            }
+
+            let bestRect = null;
+            let bestOffset = null;
+
+            for (const [offsetX, offsetY] of offsetCandidates) {
+                const x = point.x + offsetX;
+                const y = point.y + offsetY;
+                const outOfBounds = x < -120 || x + tagWidth > window.innerWidth + 120 || y < -80 || y + tagHeight > window.innerHeight + 80;
+                if (outOfBounds) {
+                    continue;
+                }
+
+                const rect = {
+                    left: x,
+                    top: y,
+                    right: x + tagWidth,
+                    bottom: y + tagHeight
+                };
+                const hasOverlap = placedRects.some((placedRect) => isRectOverlapping(rect, placedRect, gap));
+                const hasExtraOverlap = extraAvoidRects.some((avoidRect) => avoidRect && isRectOverlapping(rect, avoidRect, gap));
+                if (!hasOverlap && !hasExtraOverlap) {
+                    bestRect = rect;
+                    bestOffset = [offsetX, offsetY];
+                    break;
+                }
+
+                if (!bestRect) {
+                    bestRect = rect;
+                    bestOffset = [offsetX, offsetY];
+                }
+            }
+
+            if (!bestRect || !bestOffset) {
+                tag.style.opacity = '0';
+                return null;
+            }
+
+            const finalX = point.x + bestOffset[0];
+            const finalY = point.y + bestOffset[1];
+            tag.style.transform = `translate(${Math.round(finalX)}px, ${Math.round(finalY)}px)`;
+            tag.style.opacity = '1';
+            placedRects.push(bestRect);
+            return bestRect;
+        }
+
+        function forceSeparateTag(tag, point, text, placedRects, avoidRect, gap = 18) {
+            if (!avoidRect || !point.visible) {
+                tag.style.opacity = '0';
+                return null;
+            }
+
+            tag.textContent = text;
+            const tagWidth = Math.max(tag.offsetWidth, 56);
+            const tagHeight = Math.max(tag.offsetHeight, 22);
+
+            const x = Math.max(8, Math.min(window.innerWidth - tagWidth - 8, point.x + 12));
+            let y = avoidRect.bottom + gap;
+
+            if (y + tagHeight > window.innerHeight - 8) {
+                y = avoidRect.top - tagHeight - gap;
+            }
+
+            if (y < 8 || y + tagHeight > window.innerHeight - 8) {
+                tag.style.opacity = '0';
+                return null;
+            }
+
+            const rect = { left: x, top: y, right: x + tagWidth, bottom: y + tagHeight };
+            const hasOverlap = placedRects.some((placedRect) => isRectOverlapping(rect, placedRect, 6));
+            if (hasOverlap) {
+                tag.style.opacity = '0';
+                return null;
+            }
+
+            tag.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+            tag.style.opacity = '1';
+            placedRects.push(rect);
+            return rect;
+        }
+
+        function placeTagAtScreen(tag, text, x, y, centerX = false) {
+            tag.textContent = text;
+            const tagWidth = Math.max(tag.offsetWidth, 56);
+            const tagHeight = Math.max(tag.offsetHeight, 22);
+            const leftX = centerX ? x - tagWidth * 0.5 : x;
+            const clampedX = Math.max(8, Math.min(window.innerWidth - tagWidth - 8, leftX));
+            const clampedY = Math.max(8, Math.min(window.innerHeight - tagHeight - 8, y));
+            tag.style.transform = `translate(${Math.round(clampedX)}px, ${Math.round(clampedY)}px)`;
+            tag.style.opacity = '1';
+            return {
+                left: clampedX,
+                top: clampedY,
+                right: clampedX + tagWidth,
+                bottom: clampedY + tagHeight
+            };
+        }
+
+        function updateHudTags({
+            normalizedTheta,
+            displayDeg,
+            currentX,
+            currentY,
+            tanX,
+            tanY,
+            sinValue,
+            cosValue,
+            displayTan
+        }) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            // 斜邊標籤固定在圓的正上方外側
+            const hypAnchorX = circleCenter.x;
+            const hypAnchorY = circleCenter.y + R;
+            const adjMidX = (circleCenter.x + currentX) * 0.5;
+            const adjMidY = circleCenter.y;
+            const oppMidX = currentX;
+            const oppMidY = (circleCenter.y + currentY) * 0.5;
+            // 弧長標籤固定在圓圈左上角外
+            const arcX = circleCenter.x - R - 2.8;
+            const arcY = circleCenter.y + R + 1.5;
+            const placedRects = [];
+            const anglePoint = projectToScreen(currentX, currentY, rect);
+            const hypPoint = projectToScreen(hypAnchorX, hypAnchorY, rect);
+            const adjPoint = projectToScreen(adjMidX, adjMidY, rect);
+            const oppPoint = projectToScreen(oppMidX, oppMidY, rect);
+            const tanUpperPoint = projectToScreen(circleCenter.x + R, circleCenter.y + R * 1.05, rect);
+            const tanLowerPoint = projectToScreen(circleCenter.x + R, circleCenter.y - R * 1.05, rect);
+            const arcPoint = projectToScreen(arcX, arcY, rect);
+
+            placeTagWithAvoidance(
+                hudAngleTag,
+                anglePoint,
+                `θ ${displayDeg}° • ${normalizedTheta.toFixed(2)} rad`,
+                [[16, -34], [16, 12], [-160, -34], [-160, 12]],
+                placedRects
+            );
+            const hypRect = placeTagAtScreen(
+                hudHypTag,
+                `斜邊 r ${R.toFixed(2)}`,
+                hypPoint.x,
+                hypPoint.y - 64,
+                true
+            );
+            placedRects.push(hypRect);
+            // 水平 x 固定在藍線附近，並加入避讓清單避免高度標籤重疊
+            const adjRect = placeTagAtScreen(
+                hudAdjTag,
+                `水平 x ${signed(R * cosValue)}`,
+                adjPoint.x + 10,
+                adjPoint.y + 12
+            );
+            placedRects.push(adjRect);
+
+            const lockOppLeftOfBall = displayDeg >= 180 && displayDeg <= 328;
+            const stabilizeLeftBoundary = displayDeg >= 328 && displayDeg <= 329;
+            const forceLeftStable = lockOppLeftOfBall || stabilizeLeftBoundary;
+            const nearRightBoundary = displayDeg >= 330 || displayDeg <= 20;
+            const oppLabelPoint = (nearRightBoundary || forceLeftStable) ? anglePoint : oppPoint;
+            const oppCandidates = forceLeftStable
+                ? [[-116, 8], [-116, 28], [-94, 8], [-94, 28]]
+                : nearRightBoundary
+                    ? [[24, 10], [24, 30], [42, 10], [42, 30], [12, 20], [-130, 20], [12, 46], [-130, 46]]
+                    : [[12, 20], [-130, 20], [12, 46], [-130, 46]];
+            let oppRect = null;
+            if (forceLeftStable) {
+                // 邊界角度固定左側，避免 328~329 度抖動
+                oppRect = placeTagAtScreen(
+                    hudOppTag,
+                    `高度 y ${signed(R * sinValue)}`,
+                    anglePoint.x - 112,
+                    anglePoint.y + 14
+                );
+                placedRects.push(oppRect);
+            } else {
+                oppRect = placeTagWithAvoidance(
+                    hudOppTag,
+                    oppLabelPoint,
+                    `高度 y ${signed(R * sinValue)}`,
+                    oppCandidates,
+                    placedRects,
+                    [hypRect, adjRect],
+                    18
+                );
+                if (!oppRect) {
+                    oppRect = forceSeparateTag(
+                        hudOppTag,
+                        oppLabelPoint,
+                        `高度 y ${signed(R * sinValue)}`,
+                        placedRects,
+                        nearRightBoundary ? adjRect : hypRect,
+                        22
+                    );
+                }
+            }
+            // 切線標籤固定在圓右側的上/下中段
+            placeTagAtScreen(
+                hudTanTag,
+                `切線 tanθ ${displayTan}`,
+                (tanY >= circleCenter.y ? tanUpperPoint.x : tanLowerPoint.x) + 12,
+                (tanY >= circleCenter.y ? tanUpperPoint.y : tanLowerPoint.y) - 10
+            );
+            placeTagWithAvoidance(
+                hudArcTag,
+                arcPoint,
+                `弧長 s ${(R * normalizedTheta).toFixed(2)}`,
+                [[0, 0]],
+                []
+            );
+        }
 
         // --- 5. 動畫迴圈 (核心物理規律計算) ---
         function animate() {
@@ -687,12 +958,37 @@
             cosProjLine.computeLineDistances();
 
             // 更新 UI 數字
-            const degrees = Math.floor((theta * 180 / Math.PI) % 360);
-            const displayDeg = degrees < 0 ? degrees + 360 : degrees;
+            const fullTurn = Math.PI * 2;
+            const normalizedTheta = ((theta % fullTurn) + fullTurn) % fullTurn;
+            const displayDeg = Math.floor(normalizedTheta * 180 / Math.PI);
+            // 更新紫色弧長路徑
+            const arcPositions = arcPathGeo.attributes.position.array;
+            const arcPointCount = Math.max(2, Math.ceil((normalizedTheta / fullTurn) * arcSegments) + 1);
+            for (let i = 0; i < arcPointCount; i++) {
+                const t = i / (arcPointCount - 1);
+                const angle = normalizedTheta * t;
+                arcPositions[i * 3] = circleCenter.x + R * Math.cos(angle);
+                arcPositions[i * 3 + 1] = circleCenter.y + R * Math.sin(angle);
+                arcPositions[i * 3 + 2] = 0;
+            }
+            arcPathGeo.setDrawRange(0, arcPointCount);
+            arcPathGeo.attributes.position.needsUpdate = true;
+
             angleValDisplay.innerText = displayDeg.toString().padStart(3, '0');
             sinValDisplay.innerText = sinValue.toFixed(2);
             cosValDisplay.innerText = cosValue.toFixed(2);
             tanValDisplay.innerText = displayTan; 
+            updateHudTags({
+                normalizedTheta,
+                displayDeg,
+                currentX,
+                currentY,
+                tanX,
+                tanY,
+                sinValue,
+                cosValue,
+                displayTan
+            });
 
             renderer.render(scene, camera);
         }
