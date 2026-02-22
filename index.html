@@ -108,7 +108,7 @@
         }
         .speed-buttons {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 8px;
         }
         .speed-btn {
@@ -296,11 +296,9 @@
         <div id="hud-arc" class="data-tag arc"></div>
     </div>
         <div id="speed-control">
-            <span class="speed-label">自動轉動速度</span>
             <div class="speed-buttons">
                 <button type="button" class="speed-btn" data-speed="0">暫停</button>
                 <button type="button" class="speed-btn active" data-speed="0.008">慢速</button>
-                <button type="button" class="speed-btn" data-speed="0.015">標準</button>
                 <button type="button" class="speed-btn" data-speed="0.03">快速</button>
             </div>
         </div>
