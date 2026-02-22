@@ -85,49 +85,39 @@
             position: fixed;
             top: 20px;
             right: 20px;
-            width: min(320px, 30vw);
-            background: rgba(0, 0, 0, 0.7);
-            border: 1px solid #333;
-            border-radius: 12px;
-            padding: 12px 14px;
-            box-sizing: border-box;
-            backdrop-filter: blur(5px);
             z-index: 12;
         }
-        .speed-label {
-            display: block;
-            margin-bottom: 10px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.18);
-            font-size: 13px;
-            font-weight: 800;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: #f3f3f3;
-            text-shadow: 0 0 8px rgba(255, 204, 0, 0.25);
-        }
-        .speed-buttons {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 8px;
-        }
         .speed-btn {
+            width: 48px;
+            height: 48px;
+            padding: 0;
             border: 1px solid #4a4a4a;
-            border-radius: 8px;
-            background: #1a1a1a;
-            color: #ddd;
-            font-size: 12px;
-            font-weight: 600;
-            padding: 8px 6px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.72);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
+            box-sizing: border-box;
+            backdrop-filter: blur(5px);
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        .speed-btn-emoji {
+            display: block;
+            font-size: 24px;
+            line-height: 1;
+            transform: translateY(-1px);
+            font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+            pointer-events: none;
         }
         .speed-btn:hover {
-            border-color: #6a6a6a;
+            border-color: #ffcc00;
             color: #fff;
         }
         .speed-btn.active {
             border-color: #ffcc00;
-            color: #ffdd44;
             box-shadow: 0 0 10px rgba(255, 204, 0, 0.25);
         }
         #hud-layer {
@@ -226,20 +216,13 @@
             #speed-control {
                 top: calc(10px + env(safe-area-inset-top));
                 right: calc(10px + env(safe-area-inset-right));
-                width: min(260px, calc(100vw - 20px - env(safe-area-inset-right)));
-                padding: 10px 12px;
-            }
-            .speed-label {
-                font-size: 13px;
-                margin-bottom: 6px;
-            }
-            .speed-buttons {
-                gap: 6px;
             }
             .speed-btn {
-                font-size: 13px;
-                padding: 9px 6px;
-                min-height: 38px;
+                width: 44px;
+                height: 44px;
+            }
+            .speed-btn-emoji {
+                font-size: 22px;
             }
             .data-tag {
                 font-size: 11px;
@@ -296,11 +279,7 @@
         <div id="hud-arc" class="data-tag arc"></div>
     </div>
         <div id="speed-control">
-            <div class="speed-buttons">
-                <button type="button" class="speed-btn" data-speed="0">暫停</button>
-                <button type="button" class="speed-btn active" data-speed="0.008">慢速</button>
-                <button type="button" class="speed-btn" data-speed="0.03">快速</button>
-            </div>
+            <button type="button" id="speed-toggle" class="speed-btn active" aria-label="切換速度" title="速度：慢速"><span class="speed-btn-emoji">🐢</span></button>
         </div>
 
     <script>
@@ -338,7 +317,8 @@
                 baseFrustumSize: isMobile ? 32 : 35,
                 // 動畫主體固定在畫布由左到右約 2/5 的位置
                 anchorNdcX: -0.2,
-                anchorNdcY: 0.0
+                // 手機版略微下移，避免視覺中心偏上
+                anchorNdcY: isMobile ? -0.08 : 0.0
             };
         }
 
@@ -509,7 +489,8 @@
 
 
         // --- 4. 互動與 UI 控制 (新增滑鼠/觸控拖曳) ---
-        const speedButtons = Array.from(document.querySelectorAll('.speed-btn'));
+        const speedToggle = document.getElementById('speed-toggle');
+        const speedToggleEmoji = speedToggle.querySelector('.speed-btn-emoji');
         const angleValDisplay = document.getElementById('angle-val');
         const sinValDisplay = document.getElementById('sin-val');
         const cosValDisplay = document.getElementById('cos-val');
@@ -522,12 +503,26 @@
         const hudArcTag = document.getElementById('hud-arc');
         const projectedVec = new THREE.Vector3();
 
-        speedButtons.forEach((button) => {
-            button.addEventListener('click', () => {
-                speed = parseFloat(button.dataset.speed);
-                speedButtons.forEach((btn) => btn.classList.toggle('active', btn === button));
-            });
+        const speedModes = [
+            { value: 0, emoji: '⏸️', label: '暫停' },
+            { value: 0.008, emoji: '🐢', label: '慢速' },
+            { value: 0.03, emoji: '⚡', label: '快速' }
+        ];
+        let speedModeIndex = 1;
+
+        function applySpeedMode(index) {
+            const mode = speedModes[index];
+            speed = mode.value;
+            speedModeIndex = index;
+            speedToggleEmoji.textContent = mode.emoji;
+            speedToggle.title = `速度：${mode.label}`;
+            speedToggle.setAttribute('aria-label', `切換速度（目前${mode.label}）`);
+        }
+
+        speedToggle.addEventListener('click', () => {
+            applySpeedMode((speedModeIndex + 1) % speedModes.length);
         });
+        applySpeedMode(speedModeIndex);
 
         window.addEventListener('resize', () => {
             resizeScene();
